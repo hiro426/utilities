@@ -1,0 +1,53 @@
+# encoding: cp932
+#==================================================================================================
+#　@outline
+#==================================================================================================
+# ruby DependConverter [arg...]
+# argument
+# ARGV[0]...コンバート対象のファイル
+
+# ターゲットに付与したいディレクトリ
+ADDDIR = "obj/"
+
+# 書き込む文字列用
+text = String.new
+target = String.new
+
+# ファイルを読み込みモードで開く
+File.open(ARGV[0], "r") {|file|
+
+# テキストの内容を全て読み込む
+file.each {|line|
+	text += line
+}
+
+# .dファイルは[\],[\n]が入るので排除する
+text.gsub!("\n", "")
+text.gsub!("\\", "")
+
+# 【コンバート】
+# 変換し易いように一旦ターゲットを切り離す
+text.sub!(/\A.*: /, "")
+target = $&
+
+# ダブルクォーテーションとカンマを挿入
+text.gsub!(/ +/, '", "')
+text = '"' + text + '"'
+
+# ターゲットを変換する
+target.sub!(/: /, "")
+target = '"' + ADDDIR + target + '"'
+
+}#file
+
+# ファイルを書き込みモードで開く
+File.open(ARGV[0], "w") {|file|
+
+# 依存関係をファイルに書き込む
+file.printf "file "
+file.printf target
+file.printf " => ["
+file.printf text
+file.printf "]\n"
+
+}#file

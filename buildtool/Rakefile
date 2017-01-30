@@ -1,0 +1,170 @@
+# encoding: cp932
+#==================================================================================================
+#　@outline		ソースコードのコンパイル、オブジェクトのリンク
+#==================================================================================================
+# --- setting -------------------------------------------------------------------------------------
+# 実行ファイル出力先
+EXENAME = "Test.exe"
+EXENAME_D = "TestDebug.exe"
+EXEVER = "1.0.0"
+
+# 梱包するXMLファイルの名前
+XMLNAME = "config.xml"
+
+# コンパイル済みオブジェクト出力DIR
+OUTDIR = "obj"
+OUTDIR_D = "obj"
+
+# コンパイルツール
+COMPILER = "g++ -c"				# コンパイラ
+LINKER = "g++"					# リンカ
+
+# コンパイルの対象となるファイルのルートディレクトリ
+SRCDIR = "src"
+
+# --- core ----------------------------------------------------------------------------------------
+# ウィンドウズのバージョン(0x0501=>winXP 0x0601=>win7 etc... 指定するバージョンによっては一部関数が使用できない)
+__WINVER = "-D WINVER=0x0601 -D _WIN32_WINNT=0x0601"
+# プリコンパイル済みヘッダー名(path)
+PRE_HEADER_PATH = "#{SRCDIR}/lib/test/stdafx.h"
+
+# debug & release option
+$g_exename = ""					# 出力ファイルexe名(パス+ファイル名)
+$g_outdir = ""					# オブジェクト出力先
+$g_prev_option = ""				# 前方オプション
+$g_back_option = ""				# 後方オプション
+
+if ARGV[0] == "release"
+
+$g_exename = "#{EXENAME}"
+$g_outdir = "#{OUTDIR}"
+$g_prev_option = "-Os #{__WINVER}"
+$g_back_option = ""
+
+else
+
+$g_exename = "#{EXENAME_D}"
+$g_outdir = "#{OUTDIR_D}"
+$g_prev_option = "-g -O0 #{__WINVER} -D _DEBUG"
+$g_back_option = ""
+
+end
+
+# インクルード + ライブラリ
+LIB_ROOT__ = "C:/@program/@library"
+xerces_inc__ = "-I#{LIB_ROOT__}/xercesc/include"
+xerces_libinc__ = "-L#{LIB_ROOT__}/xercesc/lib"
+xerces_lib__ = "-lxerces-c.dll"
+
+libinc__ = "-Isrc/lib"
+lib__ = "-lwinmm -lgdi32 -lgdiplus -lopengl32 -lglu32"
+
+INC = "#{xerces_inc__} #{libinc__} -I#{$g_outdir}"
+LIB = "#{xerces_libinc__} #{xerces_lib__} #{lib__} -lShLwApi"
+
+# --- task ----------------------------------------------------------------------------------------
+# オブジェクトの出力フォルダ
+directory $g_outdir
+
+# プリコンパイル済みヘッダーのオブジェクト＆タスク名作成
+PREHEADER_OBJ = PRE_HEADER_PATH.pathmap("#{$g_outdir}/%f.gch")
+
+# task
+desc "default => build"
+task :default => :build
+desc "release build"
+task :release => :rebuild
+desc "all build"
+task :rebuild => [:clean, :build]
+desc "sub build"
+task :build => [$g_outdir, PREHEADER_OBJ, $g_exename]
+
+# コンパイル対象ファイルと出力オブジェクトをリスト化
+SRCLIST = FileList["#{SRCDIR}/**/*.cpp"]
+OBJLIST = SRCLIST.ext('o').pathmap("#{$g_outdir}/%f")	# %fは拡張子を含むファイル名のみ取り出す
+#==================================================================================================
+#　@outline		クリーン(デフォルトのcleanはrakefile以下の.bakファイルも消えるようなので気を付ける)
+#==================================================================================================
+require 'rake/clean'	# clean & clobber task
+DEL_OBJLIST		= SRCLIST.ext('o').pathmap("#{OUTDIR}/%f")
+DEL_OBJLIST_D	= SRCLIST.ext('o').pathmap("#{OUTDIR_D}/%f")
+DEL_DEPEND		= SRCLIST.ext('d').pathmap("#{OUTDIR}/%f")
+DEL_DEPEND_D	= SRCLIST.ext('d').pathmap("#{OUTDIR_D}/%f")
+
+CLEAN.include(DEL_OBJLIST)					# オブジェクトを削除リストにインクルード
+CLEAN.include(DEL_OBJLIST_D)				# オブジェクトを削除リストにインクルード(debug用のモノ)
+CLEAN.include(DEL_DEPEND)					# 依存関係ファイルを削除リストにインクルード
+CLEAN.include(DEL_DEPEND_D)					# を削除リストにインクルード(debug用のモノ)
+CLEAN.include(EXENAME)						# 実行ファイルを削除リストにインクルード
+CLEAN.include(EXENAME_D)					# 実行ファイルを削除リストにインクルード(debug用のモノ)
+CLEAN.include("#{OUTDIR}/*.h.gch")			# プリコンパイル済みヘッダーを削除リストにインクルード
+CLEAN.include("#{OUTDIR_D}/*.h.gch")		# プリコンパイル済みヘッダーを削除リストにインクルード(debug用のモノ)
+
+# リソース関連も必要であれば変数化しよう！
+CLEAN.include("#{OUTDIR}/Resource.o")		# リソースファイル
+CLEAN.include("#{OUTDIR_D}/Resource.o")		# リソースファイル(debug用のモノ)
+
+# cleanの場合はsrc/**/*.bakを除外
+if ARGV[0] != "clobber"
+	CLEAN.exclude(/.bak$/)
+end
+
+# clobber は package があれば packageも削除する
+# CLOBBER.include("")
+# print "◆クリーン対象", CLEAN, "\n"
+
+#==================================================================================================
+#　@outline		ビルド
+#==================================================================================================
+# オブジェクトのリンク
+file $g_exename => OBJLIST do |t|
+	print "●#{$g_outdir}/Resource.o ⇒ #{SRCDIR}/rc/Resource.rc\n"
+	sh "windres #{SRCDIR}/rc/Resource.rc #{$g_outdir}/Resource.o"	# とりあえずリテラルで
+	print "▼create #{t.name}\n"
+	sh "#{LINKER} -o\"#{$g_exename}\" #{OBJLIST} #{$g_outdir}/Resource.o #{LIB} -mwindows"
+end
+
+# プリコンパイル
+file PREHEADER_OBJ => PRE_HEADER_PATH do |t|
+	print "◆#{PREHEADER_OBJ} ⇒ #{PRE_HEADER_PATH}\n"
+	sh "#{COMPILER} #{$g_prev_option} -o\"#{t.name}\" #{PRE_HEADER_PATH} #{$g_back_option} #{INC}"
+end
+
+# コンパイル
+rule '.o' => proc { |taskname| SRCLIST.grep(/\/#{File.basename(taskname, '.o')}.cpp/) } do |t|
+	# オブジェクトファイルの作成
+	print "★#{t} ⇒ #{t.source}\n"
+	sh "#{COMPILER} #{$g_prev_option} -o\"#{t.name}\" #{t.source} #{$g_back_option} #{INC}"
+	# 依存関係ファイルの作成
+	dname = t.name.sub(/.o$/, ".d")
+	sh "#{COMPILER} -MM #{t.source} #{INC} > #{dname}"
+	# 依存関係ファイルをmake用からrake用にコンバート
+	system('ruby', 'DependConverter.rb', dname)
+#
+end
+
+# 依存関係ファイルのロード(タスクのロード)
+Dir.glob("#{$g_outdir}/*.d") {|file| load file}
+
+#==================================================================================================
+#　@outline		パッケージ(プロジェクトごとに調整してください)
+#==================================================================================================
+require 'rake/packagetask'
+# task package & repackage & clobber_package
+Rake::PackageTask.new(EXENAME, EXEVER) do |p|
+	p.package_dir = "../package"		# 出力先
+
+	p.package_files.include("./#{EXENAME}")				# 梱包するファイル
+	p.package_files.include("./libgcc_s_dw2-1.dll")		# 梱包するファイル
+#	p.package_files.include("./libkurobee.dll")			# 梱包するファイル
+	p.package_files.include("./libxerces-c-3-1.dll")	# 梱包するファイル
+	p.package_files.include("./libstdc++-6.dll")		# 梱包するファイル
+	p.package_files.include("./#{XMLNAME}")				# 梱包するファイル
+	p.package_files.include("res/*.*")					# 梱包するファイル
+	p.package_files.include("./readme.txt")				# 梱包するファイル
+
+#	p.need_tar_gz = true	# tar.gzを作成
+	p.need_tar_bz2 = true	# tar.bz2を作成
+#	p.name
+#	p.version
+end

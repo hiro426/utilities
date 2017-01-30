@@ -1,0 +1,12 @@
+# encoding: cp932
+
+#need
+#v1.9.3
+#gem install guard
+#gem install wdm -v 0.0.3
+#gem install guard-shell
+#guard -i...インタラクションモード無効
+
+guard 'shell' do
+	watch(/src\/(.*).(.*)/) {|f| `rake -q`}
+end
